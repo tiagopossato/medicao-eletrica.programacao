@@ -3,6 +3,8 @@
 #include <DS1307RTC.h>
 #include <SPI.h>
 #include <SD.h>
+#include <SoftwareSerial.h>
+SoftwareSerial serialPainel(2,3); // RX, TX
 
 const int chipSelect = 4;
 bool salvar;
@@ -60,70 +62,86 @@ void setup() {
 
   saida = String("data hora, Sensor 1 -> Tensão, Sensor 1 -> Corrente, Sensor 2 -> Tensão, Sensor 2 -> Corrente");
   Serial.println(saida);
-  // put your setup code here, to run once:
 
-  Serial.println(calculaPosicao(31, 12));
+  serialPainel.begin(9600);
+
 }
 
 void loop() {
   tmElements_t tm;
   saida = String();
   String nomeArquivo = String("");
-  /*--------LE DATA E HORA---------*/
-  if (RTC.read(tm)) {
-    saida += tm.Day;
-    saida += '/';
-    saida += tm.Month;
-    saida += '/';
-    saida += tmYearToCalendar(tm.Year);
-    saida += ' ';
-    saida += tm.Hour;
-    saida += ':';
-    saida += tm.Minute;
-    saida += ':';
-    saida += tm.Second;
-    nomeArquivo += tm.Day;
-    nomeArquivo += "-";
-    nomeArquivo += tm.Month;
-    nomeArquivo += "-";
-    nomeArquivo += tmYearToCalendar(tm.Year);
-    nomeArquivo += ".csv";
+  unsigned long currentMillis = millis();
+  static unsigned long previousMillis = 0;
 
-  } else {
-    saida += millis();
+  if (Serial.available()) {
+    int t = Serial.parseInt();
+    serialPainel.print(t);
+    Serial.println(t);
   }
-  saida += ",";
-  /*--------LE SENSORES---------*/
-  lerSensor(&sensor1);
-  saida += sensor1.tensao;
-  saida += ",";
-  saida += sensor1.corrente;
-  saida += ",";
-  lerSensor(&sensor2);
-  saida += sensor2.tensao;
-  saida += ",";
-  saida += sensor2.corrente;
-  saida += ",";
-  /*------SALVA DADOS NO CARTAO DE MEMORIA--*/
-  if (salvar) {
-    // open the file. note that only one file can be open at a time,
-    // so you have to close this one before opening another.
-    if (nomeArquivo.length() < 3) nomeArquivo = "datalog.csv";
-    File dataFile = SD.open(nomeArquivo, FILE_WRITE);
-    // if the file is available, write to it:
-    if (dataFile) {
-      dataFile.println(saida);
-      dataFile.close();
-    }
-    // if the file isn't open, pop up an error:
-    else {
-      Serial.println("error opening datalog.txt");
-    }
+
+  if (serialPainel.available()) {
+    Serial.write(serialPainel.read());
   }
-  /*--------MOSTRA NA SERIAL---------*/
-  Serial.println(saida);
-  /*--------Aguarda 1 segundo---------*/
-  delay(1000);
+  if (currentMillis - previousMillis >= 1000) {
+    previousMillis = currentMillis;
+    /*--------LE DATA E HORA---------*/
+    if (RTC.read(tm)) {
+      saida += tm.Day;
+      saida += '/';
+      saida += tm.Month;
+      saida += '/';
+      saida += tmYearToCalendar(tm.Year);
+      saida += ' ';
+      saida += tm.Hour;
+      saida += ':';
+      saida += tm.Minute;
+      saida += ':';
+      saida += tm.Second;
+      nomeArquivo += tm.Day;
+      //nomeArquivo += " ";
+      nomeArquivo += tm.Month;
+      //nomeArquivo += " ";
+      nomeArquivo += tmYearToCalendar(tm.Year);
+      nomeArquivo += ".csv";
+
+      calculaPosicao(&tm);
+    } else {
+      saida += millis();
+    }
+    saida += ",";
+    /*--------LE SENSORES---------*/
+    lerSensor(&sensor1);
+    saida += sensor1.tensao;
+    saida += ",";
+    saida += sensor1.corrente;
+    saida += ",";
+    lerSensor(&sensor2);
+    saida += sensor2.tensao;
+    saida += ",";
+    saida += sensor2.corrente;
+    saida += ",";
+    /*------SALVA DADOS NO CARTAO DE MEMORIA--*/
+    if (salvar) {
+      // open the file. note that only one file can be open at a time,
+      // so you have to close this one before opening another.
+      if (nomeArquivo.length() < 3) nomeArquivo = "datalog.csv";
+      File dataFile = SD.open(nomeArquivo, FILE_WRITE);
+      // if the file is available, write to it:
+      if (dataFile) {
+        dataFile.println(saida);
+        dataFile.close();
+      }
+      // if the file isn't open, pop up an error:
+      else {
+        Serial.print("error opening ");
+        Serial.println(nomeArquivo);
+      }
+    }
+    /*--------MOSTRA NA SERIAL---------*/
+    Serial.println(saida);
+    /*--------Aguarda 1 segundo---------*/
+  }
 
 }
 
@@ -152,10 +170,10 @@ float converte(float x, float in_min, float in_max, float out_min,
 /**
    Calcula posicao do painel pela hora do dia
 */
-uint32_t calculaPosicao(uint8_t dia, uint8_t mes) {
+uint32_t calculaPosicao(tmElements_t *tm) {
   uint8_t tmp = 1;
-  uint16_t dias = 0;
-  for (; tmp < mes; tmp++) {
+  uint16_t dias = tm->Day;
+  for (; tmp < tm->Month; tmp++) {
     switch (tmp) {
       case 1: dias += 31; break;
       case 2: dias += 28; break;
@@ -170,19 +188,36 @@ uint32_t calculaPosicao(uint8_t dia, uint8_t mes) {
       case 11: dias += 30; break;
     }
   }
-  dias += dia;
 
-  return nascerDoSol(dias);
+  uint32_t segundosPorDia = porDoSol(dias) - nascerDoSol(dias);
+  uint32_t segundosAtual = ((uint32_t)tm->Hour * 60 * 60 ) + ((uint32_t)tm->Minute * 60 ) + (uint32_t)tm->Second;
+  uint8_t segundosRelativos = (segundosAtual - nascerDoSol(dias)) * 100 / segundosPorDia;
+  Serial.print(segundosRelativos);
+  Serial.println("% do dia.");
+  if (segundosRelativos >= 0 && segundosRelativos <= 100) {
+    serialPainel.print(segundosRelativos);
+  }
+
 }
 
 /**
    Calcula o segundo em que o sol nasce no dia
 */
-uint32_t nascerDoSol(uint32_t segundo) {
-  return (0.0000000302070774172166 * pow(segundo, 5))
-         - (0.0000198076304492236 * pow(segundo, 4))
-         + (0.0035950755 * pow(segundo, 3))
-         - (0.2694919508 * pow(segundo, 2))
-         + (48.27020716989 * segundo)
+uint32_t nascerDoSol(uint16_t dia) {
+  return (0.0000000302070774172166 * pow(dia, 5))
+         - (0.0000198076304492236 * pow(dia, 4))
+         + (0.0035950755 * pow(dia, 3))
+         - (0.2694919508 * pow(dia, 2))
+         + (48.27020716989 * dia)
          + 19901.4743825752;
 }
+
+uint32_t porDoSol(uint16_t dia) {
+  return (0.0000000415881756309789 * pow(dia, 5))
+         - (0.000042747 * pow(dia, 4))
+         + (0.0155753852 * pow(dia, 3))
+         - (2.1677644896 * pow(dia, 2))
+         + (58.67243756 * dia)
+         + 69346.2344757363;
+}
+
