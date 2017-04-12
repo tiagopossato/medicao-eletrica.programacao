@@ -4,7 +4,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
-SoftwareSerial serialPainel(2,3); // RX, TX
+SoftwareSerial serialPainel(2, 3); // RX, TX
 
 const int chipSelect = 4;
 bool salvar;
@@ -30,7 +30,11 @@ Sensor sensor1;
 Sensor sensor2;
 String saida;
 
-void setup() {
+String inputString = "";         // a string to hold incoming data
+
+
+void setup () {
+  inputString.reserve(3);
   Serial.begin(9600);
   sensor1.pinoTensao = A2;
   sensor1.pinoCorrente = A0;
@@ -74,15 +78,26 @@ void loop() {
   unsigned long currentMillis = millis();
   static unsigned long previousMillis = 0;
 
+
   if (Serial.available()) {
-    int t = Serial.parseInt();
-    serialPainel.print(t);
-    Serial.println(t);
+    // get the new byte:
+    char inChar = (char)Serial.read();
+    // add it to the inputString:
+    if (inChar != '\n')inputString += inChar;
+    // if the incoming character is a newline, set a flag
+    // so the main loop can do something about it:
+    if (inChar == '\n') {
+      if (inputString.length() >= 1) {
+        serialPainel.println(inputString.toInt());
+      }
+      inputString = "";
+    }
   }
 
   if (serialPainel.available()) {
     Serial.write(serialPainel.read());
   }
+  
   if (currentMillis - previousMillis >= 1000) {
     previousMillis = currentMillis;
     /*--------LE DATA E HORA---------*/
@@ -156,7 +171,7 @@ void lerSensor(Sensor *sensor) {
   lido = 0;
   for (int i = 0; i < AMOSTRAS; i++) lido += analogRead(sensor->pinoCorrente);
   //converte e aplica curva de calibração
-  sensor->corrente = sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1];
+  sensor->corrente = abs(sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1]);
 }
 
 /*
@@ -192,10 +207,11 @@ uint32_t calculaPosicao(tmElements_t *tm) {
   uint32_t segundosPorDia = porDoSol(dias) - nascerDoSol(dias);
   uint32_t segundosAtual = ((uint32_t)tm->Hour * 60 * 60 ) + ((uint32_t)tm->Minute * 60 ) + (uint32_t)tm->Second;
   uint8_t segundosRelativos = (segundosAtual - nascerDoSol(dias)) * 100 / segundosPorDia;
-  Serial.print(segundosRelativos);
-  Serial.println("% do dia.");
+
   if (segundosRelativos >= 0 && segundosRelativos <= 100) {
-    serialPainel.print(segundosRelativos);
+    serialPainel.println(segundosRelativos);
+    Serial.print(segundosRelativos);
+    Serial.println("% do dia.");
   }
 
 }
