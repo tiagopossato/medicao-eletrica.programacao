@@ -32,10 +32,20 @@ String saida;
 
 String inputString = "";         // a string to hold incoming data
 
+/*
+   Funcao de regressao linear com com valores em ponto flutuante
+*/
+float converte(float x, float in_min, float in_max, float out_min,
+               float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 
 void setup () {
   inputString.reserve(3);
+  serialPainel.begin(9600);
   Serial.begin(9600);
+  
   sensor1.pinoTensao = A2;
   sensor1.pinoCorrente = A0;
   sensor1.rangeCorrente = 20;
@@ -64,10 +74,6 @@ void setup () {
     salvar = true;
   }
 
-  saida = String("data hora, Sensor 1 -> Tensão, Sensor 1 -> Corrente, Sensor 2 -> Tensão, Sensor 2 -> Corrente");
-  Serial.println(saida);
-
-  serialPainel.begin(9600);
 
 }
 
@@ -77,7 +83,6 @@ void loop() {
   String nomeArquivo = String("");
   unsigned long currentMillis = millis();
   static unsigned long previousMillis = 0;
-
 
   if (Serial.available()) {
     // get the new byte:
@@ -97,7 +102,7 @@ void loop() {
   if (serialPainel.available()) {
     Serial.write(serialPainel.read());
   }
-  
+
   if (currentMillis - previousMillis >= 1000) {
     previousMillis = currentMillis;
     /*--------LE DATA E HORA---------*/
@@ -135,7 +140,6 @@ void loop() {
     saida += sensor2.tensao;
     saida += ",";
     saida += sensor2.corrente;
-    saida += ",";
     /*------SALVA DADOS NO CARTAO DE MEMORIA--*/
     if (salvar) {
       // open the file. note that only one file can be open at a time,
@@ -171,15 +175,7 @@ void lerSensor(Sensor *sensor) {
   lido = 0;
   for (int i = 0; i < AMOSTRAS; i++) lido += analogRead(sensor->pinoCorrente);
   //converte e aplica curva de calibração
-  sensor->corrente = abs(sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1]);
-}
-
-/*
-   Funcao de regressao linear com com valores em ponto flutuante
-*/
-float converte(float x, float in_min, float in_max, float out_min,
-               float out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  sensor->corrente = sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1];
 }
 
 /**
