@@ -1,12 +1,13 @@
 #include <Wire.h>
 #include <Time.h>
+#include <TimeLib.h>
 #include <DS1307RTC.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
 SoftwareSerial serialPainel(2, 3); // RX, TX
 
-const int chipSelect = 4;
+const int chipSelect = 10;
 bool salvar;
 
 //estrutura com os dados de um sensor
@@ -46,23 +47,23 @@ void setup () {
   serialPainel.begin(9600);
   Serial.begin(9600);
   
-  sensor1.pinoTensao = A2;
-  sensor1.pinoCorrente = A0;
+  sensor1.pinoTensao = A3;
+  sensor1.pinoCorrente = A2;
   sensor1.rangeCorrente = 20;
   sensor1.fatorCorrente[0] = 1.2671894881;
   sensor1.fatorCorrente[1] = 0.0625259983;
-  sensor1.rangeTensao = 23;
-  sensor1.fatorTensao[0] = 0.9431656581;
-  sensor1.fatorTensao[1] = 0.0438440746;
+  sensor1.rangeTensao = 30;
+  //sensor1.fatorTensao[0] = 0.9431656581;
+  //sensor1.fatorTensao[1] = 0.0438440746;
 
-  sensor2.pinoTensao = A3;
-  sensor2.pinoCorrente = A1;
+  sensor2.pinoTensao = A1;
+  sensor2.pinoCorrente = A0;
   sensor2.rangeCorrente = 20;
   sensor2.fatorCorrente[0] = 1.2549100775;
   sensor2.fatorCorrente[1] = 0.033910469;
-  sensor2.rangeTensao = 23;
-  sensor2.fatorTensao[0] = 0.9398017364;
-  sensor2.fatorTensao[1] = 0.0487064435;
+  sensor2.rangeTensao = 30;
+  //sensor2.fatorTensao[0] = 0.9398017364;
+  //sensor2.fatorTensao[1] = 0.0487064435;
 
 
   // see if the card is present and can be initialized:
