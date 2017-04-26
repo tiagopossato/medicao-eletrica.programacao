@@ -1,10 +1,16 @@
+#include "util.h"
 #include <Wire.h>
 #include <Time.h>
+
+#ifdef  _WIN32
 #include <TimeLib.h>
+#endif
+
 #include <DS1307RTC.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
+
 SoftwareSerial serialPainel(2, 3); // RX, TX
 
 const int chipSelect = 10;
@@ -41,17 +47,16 @@ float converte(float x, float in_min, float in_max, float out_min,
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-
 void setup () {
-  inputString.reserve(3);
+  inputString.reserve(15);
   serialPainel.begin(9600);
   Serial.begin(9600);
-  
+
   sensor1.pinoTensao = A3;
   sensor1.pinoCorrente = A2;
   sensor1.rangeCorrente = 20;
-  sensor1.fatorCorrente[0] = 1.2671894881;
-  sensor1.fatorCorrente[1] = 0.0625259983;
+  sensor1.fatorCorrente[0] = 1.2549100775;
+  sensor1.fatorCorrente[1] = 0.083910469;
   sensor1.rangeTensao = 30;
   //sensor1.fatorTensao[0] = 0.9431656581;
   //sensor1.fatorTensao[1] = 0.0438440746;
@@ -59,12 +64,11 @@ void setup () {
   sensor2.pinoTensao = A1;
   sensor2.pinoCorrente = A0;
   sensor2.rangeCorrente = 20;
-  sensor2.fatorCorrente[0] = 1.2549100775;
-  sensor2.fatorCorrente[1] = 0.033910469;
+  sensor2.fatorCorrente[0] = 1.2671894881;
+  sensor2.fatorCorrente[1] = 0.0695259983;
   sensor2.rangeTensao = 30;
   //sensor2.fatorTensao[0] = 0.9398017364;
   //sensor2.fatorTensao[1] = 0.0487064435;
-
 
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
@@ -74,7 +78,6 @@ void setup () {
   } else {
     salvar = true;
   }
-
 
 }
 
@@ -90,15 +93,14 @@ void loop() {
     char inChar = (char)Serial.read();
     // add it to the inputString:
     if (inChar != '\n')inputString += inChar;
-    // if the incoming character is a newline, set a flag
-    // so the main loop can do something about it:
     if (inChar == '\n') {
       if (inputString.length() >= 1) {
-        serialPainel.println(inputString.toInt());
+        serialPainel.println(inputString);
       }
       inputString = "";
     }
   }
+
 
   if (serialPainel.available()) {
     Serial.write(serialPainel.read());
@@ -126,7 +128,14 @@ void loop() {
       nomeArquivo += tmYearToCalendar(tm.Year);
       nomeArquivo += ".csv";
 
-      calculaPosicao(&tm);
+      String posicao = "2/";
+      posicao += diaDoAno(&tm);
+      posicao += "/";
+      posicao += segundoAtual(&tm);
+      Serial.println(posicao);
+
+      serialPainel.println(posicao);
+
     } else {
       saida += millis();
     }
@@ -179,58 +188,4 @@ void lerSensor(Sensor *sensor) {
   sensor->corrente = sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1];
 }
 
-/**
-   Calcula posicao do painel pela hora do dia
-*/
-uint32_t calculaPosicao(tmElements_t *tm) {
-  uint8_t tmp = 1;
-  uint16_t dias = tm->Day;
-  for (; tmp < tm->Month; tmp++) {
-    switch (tmp) {
-      case 1: dias += 31; break;
-      case 2: dias += 28; break;
-      case 3: dias += 31; break;
-      case 4: dias += 30; break;
-      case 5: dias += 31; break;
-      case 6: dias += 30; break;
-      case 7: dias += 31; break;
-      case 8: dias += 31; break;
-      case 9: dias += 30; break;
-      case 10: dias += 31; break;
-      case 11: dias += 30; break;
-    }
-  }
-
-  uint32_t segundosPorDia = porDoSol(dias) - nascerDoSol(dias);
-  uint32_t segundosAtual = ((uint32_t)tm->Hour * 60 * 60 ) + ((uint32_t)tm->Minute * 60 ) + (uint32_t)tm->Second;
-  uint8_t segundosRelativos = (segundosAtual - nascerDoSol(dias)) * 100 / segundosPorDia;
-
-  if (segundosRelativos >= 0 && segundosRelativos <= 100) {
-    serialPainel.println(segundosRelativos);
-    Serial.print(segundosRelativos);
-    Serial.println("% do dia.");
-  }
-
-}
-
-/**
-   Calcula o segundo em que o sol nasce no dia
-*/
-uint32_t nascerDoSol(uint16_t dia) {
-  return (0.0000000302070774172166 * pow(dia, 5))
-         - (0.0000198076304492236 * pow(dia, 4))
-         + (0.0035950755 * pow(dia, 3))
-         - (0.2694919508 * pow(dia, 2))
-         + (48.27020716989 * dia)
-         + 19901.4743825752;
-}
-
-uint32_t porDoSol(uint16_t dia) {
-  return (0.0000000415881756309789 * pow(dia, 5))
-         - (0.000042747 * pow(dia, 4))
-         + (0.0155753852 * pow(dia, 3))
-         - (2.1677644896 * pow(dia, 2))
-         + (58.67243756 * dia)
-         + 69346.2344757363;
-}
 
