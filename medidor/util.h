@@ -4,9 +4,48 @@
 #include <TimeLib.h>
 #endif
 
+char tmp[63] = {};
+
+/**
+   Códigos de comunicação entre a placa de controle e a de medição
+*/
+#define POSICAOLESTEOESTE 1 //ENVIANDO POSICAO ATUAL DO PAINEL LESTE OESTE
+
+
 //Função para resetar o programa
 void(* resetFunc) (void) = 0;
 
+uint8_t buscaCaracter(char *entrada, char caracter)
+{
+  uint8_t pos = 0;
+  for (; pos <= strlen(entrada); pos++)
+  {
+    if (caracter == entrada[pos])
+    {
+      return pos;
+    }
+  }
+  return 255;
+}
+
+boolean sanitizaEntrada(char *entrada) {
+  uint8_t inicio;
+  uint8_t fim;
+ 
+  inicio = buscaCaracter(entrada, '[');
+  if (inicio == 255) {
+    return false;
+  }
+  fim = buscaCaracter(entrada, ']');
+  if (fim == 255) {
+    return false;
+  }
+
+  memcpy(tmp, &entrada[inicio + 1], fim - (inicio + 1));
+  sprintf(entrada, tmp);
+  sprintf(tmp, "");
+  return true;
+}
 
 int extraiCodigo(char *entrada) {
   char i = 0;
@@ -18,10 +57,7 @@ int extraiCodigo(char *entrada) {
     if (entrada[i] == '/') break;
     tmp += entrada[i];
   }
-
   sprintf(entrada, entrada + i + 1);
-  Serial.print("Numero: ");
-  Serial.println(tmp.toInt());
   return tmp.toInt();
 }
 
@@ -84,7 +120,7 @@ uint32_t segundoAtual(tmElements_t *tm) {
    Calcula posicao do painel pela hora do dia
 */
 /*
-uint8_t calculaPosicao(tmElements_t *tm) {
+  uint8_t calculaPosicao(tmElements_t *tm) {
 
   uint16_t dias = diaDoAno(tm);
 
@@ -99,7 +135,7 @@ uint8_t calculaPosicao(tmElements_t *tm) {
   }
 
   return 0;
-}
+  }
 
 */
 

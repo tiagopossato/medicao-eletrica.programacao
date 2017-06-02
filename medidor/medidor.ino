@@ -1,6 +1,7 @@
 #include "util.h"
 #include <Wire.h>
 #include <Time.h>
+#include <avr/wdt.h>
 
 #ifdef  _WIN32
 #include <TimeLib.h>
@@ -28,6 +29,10 @@ struct Sensor {
   char rangeTensao = 5;
 };
 
+struct Painel {
+  uint8_t posicao;
+};
+
 /*
    quantidade de amostras na porta analogica
 */
@@ -35,9 +40,12 @@ struct Sensor {
 
 Sensor sensor1;
 Sensor sensor2;
-String saida;
+Painel painelLesteOeste;
+
+String saida = "";
 
 String inputString = "";         // a string to hold incoming data
+char entradaSeguidor[64];
 
 /*
    Funcao de regressao linear com com valores em ponto flutuante
@@ -49,6 +57,7 @@ float converte(float x, float in_min, float in_max, float out_min,
 
 void setup () {
   inputString.reserve(15);
+  saida.reserve(64);
   serialPainel.begin(9600);
   Serial.begin(9600);
 
@@ -70,6 +79,8 @@ void setup () {
   //sensor2.fatorTensao[0] = 0.9398017364;
   //sensor2.fatorTensao[1] = 0.0487064435;
 
+  painelLesteOeste.posicao = 0;
+
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     Serial.println("Card failed, or not present");
@@ -79,14 +90,16 @@ void setup () {
     salvar = true;
   }
 
-}
+  //Inicializa o Watchdog
+  //wdt_enable(WDTO_500MS);
 
+}
+unsigned long previousMillis = 0;
 void loop() {
   tmElements_t tm;
-  saida = String();
   String nomeArquivo = String("");
-  unsigned long currentMillis = millis();
-  static unsigned long previousMillis = 0;
+
+  //wdt_reset();  //  reseta o watchdog
 
   if (Serial.available()) {
     // get the new byte:
@@ -101,16 +114,28 @@ void loop() {
     }
   }
 
-
   if (serialPainel.available()) {
-    Serial.write(serialPainel.read());
+    // get the new byte:
+    char inSeg = (char)serialPainel.read();
+    if (inSeg != '\n') {
+      sprintf(entradaSeguidor, "%s%c", entradaSeguidor, inSeg);
+    }
+    if (inSeg == '\n' || strlen(entradaSeguidor) == 63) {
+      Serial.println(entradaSeguidor);
+      if (strlen(entradaSeguidor) >= 1) {
+        if (sanitizaEntrada(entradaSeguidor)) {
+          trataMensagem(entradaSeguidor);
+        }
+      }
+      entradaSeguidor[0] = '\0';
+    }
   }
-
-  if (currentMillis - previousMillis >= 1000) {
-    previousMillis = currentMillis;
+  
+  if (millis() - previousMillis >= 1000) {
+    previousMillis = millis();
     /*--------LE DATA E HORA---------*/
     if (RTC.read(tm)) {
-      saida += tm.Day;
+      saida = tm.Day;
       saida += '/';
       saida += tm.Month;
       saida += '/';
@@ -128,11 +153,12 @@ void loop() {
       nomeArquivo += tmYearToCalendar(tm.Year);
       nomeArquivo += ".csv";
 
-      String posicao = "2/";
+      String posicao = "[2/";
       posicao += diaDoAno(&tm);
       posicao += "/";
       posicao += segundoAtual(&tm);
-      Serial.println(posicao);
+      posicao += "]";
+      //Serial.println(posicao);
 
       serialPainel.println(posicao);
 
@@ -150,6 +176,8 @@ void loop() {
     saida += sensor2.tensao;
     saida += ",";
     saida += sensor2.corrente;
+    saida += ",";
+    saida += painelLesteOeste.posicao;
     /*------SALVA DADOS NO CARTAO DE MEMORIA--*/
     if (salvar) {
       // open the file. note that only one file can be open at a time,
@@ -186,6 +214,17 @@ void lerSensor(Sensor *sensor) {
   for (int i = 0; i < AMOSTRAS; i++) lido += analogRead(sensor->pinoCorrente);
   //converte e aplica curva de calibração
   sensor->corrente = sensor->fatorCorrente[0] * converte((float) lido / AMOSTRAS, 0.0, 1023.0, -sensor->rangeCorrente, sensor->rangeCorrente) + sensor->fatorCorrente[1];
+}
+
+
+void trataMensagem(char *mensagem) {
+  uint8_t codigo = (uint8_t)extraiCodigo(mensagem);
+
+  switch (codigo) {
+    case POSICAOLESTEOESTE:
+      painelLesteOeste.posicao = (uint8_t)extraiCodigo(mensagem);
+      break;
+  }
 }
 
 
