@@ -121,16 +121,17 @@ void loop() {
       sprintf(entradaSeguidor, "%s%c", entradaSeguidor, inSeg);
     }
     if (inSeg == '\n' || strlen(entradaSeguidor) == 63) {
-      Serial.println(entradaSeguidor);
       if (strlen(entradaSeguidor) >= 1) {
         if (sanitizaEntrada(entradaSeguidor)) {
           trataMensagem(entradaSeguidor);
         }
       }
-      entradaSeguidor[0] = '\0';
+      for (int i = 0; i < 64; i++) {
+        entradaSeguidor[i] = '\0';
+      }
     }
   }
-  
+
   if (millis() - previousMillis >= 1000) {
     previousMillis = millis();
     /*--------LE DATA E HORA---------*/
@@ -218,8 +219,8 @@ void lerSensor(Sensor *sensor) {
 
 
 void trataMensagem(char *mensagem) {
+  //Serial.println(mensagem);
   uint8_t codigo = (uint8_t)extraiCodigo(mensagem);
-
   switch (codigo) {
     case POSICAOLESTEOESTE:
       painelLesteOeste.posicao = (uint8_t)extraiCodigo(mensagem);
