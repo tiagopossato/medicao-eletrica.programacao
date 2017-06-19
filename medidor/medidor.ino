@@ -1,12 +1,9 @@
 #include "util.h"
 #include <Wire.h>
 #include <Time.h>
-#include <avr/wdt.h>
-
 #ifdef  _WIN32
 #include <TimeLib.h>
 #endif
-
 #include <DS1307RTC.h>
 #include <SPI.h>
 #include <SD.h>
@@ -14,8 +11,11 @@
 
 SoftwareSerial serialPainel(2, 3); // RX, TX
 
-const int chipSelect = 10;
-bool salvar;
+const uint8_t chipSelect = 10;
+
+const uint8_t ledErro = 9;
+bool ledStatus;
+uint8_t errorCount;
 
 //estrutura com os dados de um sensor
 struct Sensor {
@@ -61,6 +61,10 @@ void setup () {
   serialPainel.begin(9600);
   Serial.begin(9600);
 
+  pinMode(ledErro, OUTPUT);
+  errorCount = 0;
+  ledStatus = false;
+
   sensor1.pinoTensao = A3;
   sensor1.pinoCorrente = A2;
   sensor1.rangeCorrente = 20;
@@ -84,17 +88,15 @@ void setup () {
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     Serial.println("Card failed, or not present");
-    // don't do anything more:
-    salvar = false;
+    errorCount++;
   } else {
-    salvar = true;
+    digitalWrite(ledErro, LOW);
   }
 
-  //Inicializa o Watchdog
-  //wdt_enable(WDTO_500MS);
-
 }
+
 unsigned long previousMillis = 0;
+
 void loop() {
   tmElements_t tm;
   String nomeArquivo = String("");
@@ -153,6 +155,9 @@ void loop() {
       //nomeArquivo += " ";
       nomeArquivo += tmYearToCalendar(tm.Year);
       nomeArquivo += ".csv";
+2
+175
+43000
 
       String posicao = "[2/";
       posicao += diaDoAno(&tm);
@@ -180,25 +185,34 @@ void loop() {
     saida += ",";
     saida += painelLesteOeste.posicao;
     /*------SALVA DADOS NO CARTAO DE MEMORIA--*/
-    if (salvar) {
-      // open the file. note that only one file can be open at a time,
-      // so you have to close this one before opening another.
-      if (nomeArquivo.length() < 3) nomeArquivo = "datalog.csv";
-      File dataFile = SD.open(nomeArquivo, FILE_WRITE);
-      // if the file is available, write to it:
-      if (dataFile) {
-        dataFile.println(saida);
-        dataFile.close();
+    if (nomeArquivo.length() < 3) nomeArquivo = "datalog.csv";
+    File dataFile = SD.open(nomeArquivo, FILE_WRITE);
+    if (dataFile) {
+      if (dataFile.println(saida) <= 0) {
+        errorCount++;
+      } else {
+        errorCount = 0;
       }
-      // if the file isn't open, pop up an error:
-      else {
-        Serial.print("error opening ");
-        Serial.println(nomeArquivo);
-      }
+      dataFile.close();
+    }
+    // if the file isn't open, pop up an error:
+    else {
+      Serial.print("error opening ");
+      Serial.println(nomeArquivo);
+      errorCount++;
     }
     /*--------MOSTRA NA SERIAL---------*/
     Serial.println(saida);
-    /*--------Aguarda 1 segundo---------*/
+
+    if (errorCount > 0) {
+      digitalWrite(ledErro, ledStatus);
+      ledStatus = !ledStatus;
+      if (errorCount > 5) {
+        resetFunc();
+      }
+    } else {
+      digitalWrite(ledErro, LOW);
+    }
   }
 
 }
